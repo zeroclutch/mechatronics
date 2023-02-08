@@ -38,8 +38,6 @@ int previousState = -1;
 int currentState = BRAKE;
 
 float currentSpeed = 0.1;
-volatile int totalDistance = 0;
-
 
 uint8_t pinStates[LENGTH][PIN_COUNT] = {
   //ENA,IN1,IN2,ENB,IN3,IN4
@@ -53,12 +51,12 @@ uint8_t pinStates[LENGTH][PIN_COUNT] = {
   {   1,  0,  1,  1,  1,  0}  // PIVOT_RIGHT
 };
 
-// Counter
-
+// Counter and distance 
 volatile long counter = 0;
 
 const float countsPerRotation = 886.0;
 const float circumference = 0.1885;
+volatile int totalDistance = 0;
 
 volatile unsigned long lastChannelATime = 0;
 volatile unsigned long lastChannelBTime = 0;
@@ -77,20 +75,28 @@ void setPins(uint8_t enA, uint8_t in1, uint8_t in2, uint8_t enB, uint8_t in3, ui
   if(DEBUG_MODE) Serial.print("State = ");
   if(DEBUG_MODE) Serial.println(currentState);
 
+  // Use PWM to set the speed of the motor
+  int enAValue = (int) (255.0 * currentSpeed * enA);
+
   // Turn off enable momentarily so we don't accidentally brake during switching
   if(DEBUG_MODE) Serial.print("enA value: ");
-  if(DEBUG_MODE) Serial.println((int) (255 * currentSpeed * enA));
-  analogWrite(PIN_ENA, (int) (255 * currentSpeed * enA));
+  if(DEBUG_MODE) Serial.println(enAValue);
+
+  analogWrite(PIN_ENA, enAValue);
   digitalWrite(PIN_IN1, in1);
   digitalWrite(PIN_IN2, in2);
 
   // Turn enable back on
   digitalWrite(PIN_ENA, enA);
 
+  // Use PWM to set the speed of the motor
+  int enBValue = (int) (255 * currentSpeed * enB);
+
   // Turn off enable momentarily so we don't accidentally brake during switching
   if(DEBUG_MODE) Serial.print("enB value: ");
-  if(DEBUG_MODE) Serial.println((int) (255 * currentSpeed * enB));
-  analogWrite(PIN_ENB, (int)  (255 * currentSpeed * enB));
+  if(DEBUG_MODE) Serial.println(enBValue);
+
+  analogWrite(PIN_ENB, enBValue);
   digitalWrite(PIN_IN3, in3);
   digitalWrite(PIN_IN4, in4);
 
