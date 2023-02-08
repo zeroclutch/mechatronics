@@ -75,33 +75,35 @@ void setPins(uint8_t enA, uint8_t in1, uint8_t in2, uint8_t enB, uint8_t in3, ui
   if(DEBUG_MODE) Serial.print("State = ");
   if(DEBUG_MODE) Serial.println(currentState);
 
+  /** LEFT WHEEL **/
+
   // Use PWM to set the speed of the motor
-  int enAValue = (int) (255.0 * currentSpeed * enA);
+  int enAValue = getPWMValue(enA);
 
   // Turn off enable momentarily so we don't accidentally brake during switching
   if(DEBUG_MODE) Serial.print("enA value: ");
   if(DEBUG_MODE) Serial.println(enAValue);
 
-  analogWrite(PIN_ENA, enAValue);
   digitalWrite(PIN_IN1, in1);
   digitalWrite(PIN_IN2, in2);
 
   // Turn enable back on
-  digitalWrite(PIN_ENA, enA);
+  analogWrite(PIN_ENA, enAValue);
+
+  /** RIGHT WHEEL **/
 
   // Use PWM to set the speed of the motor
-  int enBValue = (int) (255 * currentSpeed * enB);
+  int enBValue = getPWMValue(enB);
 
   // Turn off enable momentarily so we don't accidentally brake during switching
   if(DEBUG_MODE) Serial.print("enB value: ");
   if(DEBUG_MODE) Serial.println(enBValue);
 
-  analogWrite(PIN_ENB, enBValue);
   digitalWrite(PIN_IN3, in3);
   digitalWrite(PIN_IN4, in4);
 
   // Turn enable back on
-  digitalWrite(PIN_ENB, enB);
+  analogWrite(PIN_ENB, enBValue);
 }
 
 void setAllPins() {
@@ -112,6 +114,10 @@ void setAllPins() {
             pinStates[currentState][4],
             pinStates[currentState][5],
             currentState);
+}
+
+int getPWMValue(uint8_t isEnabled) {
+  return (int) (255.0 * currentSpeed * isEnabled);
 }
 
 void forward()    { currentState = FORWARD;     } 
