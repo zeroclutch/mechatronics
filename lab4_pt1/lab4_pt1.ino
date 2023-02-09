@@ -19,7 +19,7 @@
 
 #define SWITCH_COUNT 4
 
-int switchPins[SWITCH_COUNT] = {24, 25, 26, 27};
+uint8_t switchPins[SWITCH_COUNT] = {24, 25, 26, 27};
 
 enum STATES {
   FORWARD     = 0,
@@ -38,6 +38,7 @@ int previousState = -1;
 int currentState = BRAKE;
 
 float currentSpeed = 0.1;
+float previousSpeed = currentSpeed;
 
 uint8_t pinStates[LENGTH][PIN_COUNT] = {
   //ENA,IN1,IN2,ENB,IN3,IN4
@@ -77,33 +78,27 @@ void setPins(uint8_t enA, uint8_t in1, uint8_t in2, uint8_t enB, uint8_t in3, ui
 
   /** LEFT WHEEL **/
 
-  // Use PWM to set the speed of the motor
-  int enAValue = getPWMValue(enA);
-
   // Turn off enable momentarily so we don't accidentally brake during switching
   if(DEBUG_MODE) Serial.print("enA value: ");
-  if(DEBUG_MODE) Serial.println(enAValue);
+  if(DEBUG_MODE) Serial.println(getPWMValue(enA));
 
   digitalWrite(PIN_IN1, in1);
   digitalWrite(PIN_IN2, in2);
 
   // Turn enable back on
-  analogWrite(PIN_ENA, enAValue);
+  analogWrite(PIN_ENA, getPWMValue(enA));
 
   /** RIGHT WHEEL **/
 
-  // Use PWM to set the speed of the motor
-  int enBValue = getPWMValue(enB);
-
   // Turn off enable momentarily so we don't accidentally brake during switching
   if(DEBUG_MODE) Serial.print("enB value: ");
-  if(DEBUG_MODE) Serial.println(enBValue);
+  if(DEBUG_MODE) Serial.println(getPWMValue(enB));
 
   digitalWrite(PIN_IN3, in3);
   digitalWrite(PIN_IN4, in4);
 
   // Turn enable back on
-  analogWrite(PIN_ENB, enBValue);
+  analogWrite(PIN_ENB, getPWMValue(enB));
 }
 
 void setAllPins() {
@@ -191,6 +186,14 @@ void printDistance() {
   Serial.println(getDistance());
 }
 
+void printPins() {
+  Serial.print("Current pin states are: ");
+  for(int i = 0; i < SWITCH_COUNT; i++) {
+    Serial.print(digitalRead(switchPins[i]));
+    Serial.print(", ");
+  }
+}
+
 void setup() {
   Serial.begin(9600);
 
@@ -215,8 +218,9 @@ void setup() {
   attachInterrupt(CHANNEL_B, readChannelB, CHANGE);
 
   forward();
-  setTimeout(&coast, 2000);
-  setTimeout(&printDistance, 2000);
+  // setTimeout(&coast, 2000);
+  if(DEBUG_MODE) setInterval(&printDistance, 2000);
+  if(DEBUG_MODE) setInterval(&printPins, 2000);
 }
 
 void loop() {
@@ -224,12 +228,12 @@ void loop() {
   readTimeouts();
 
   // Set speed
-  // if(switchPins[0] == HIGH)      currentSpeed = 1;
-  // else if(switchPins[1] == HIGH) currentSpeed = 0.60;
-  // else if(switchPins[2] == HIGH) currentSpeed = 0.40;
-  // else if(switchPins[3] == HIGH) currentSpeed = 0.25;
+  if(digitalRead(switchPins[0]) == HIGH)      currentSpeed = 1;
+  else if(digitalRead(switchPins[1]) == HIGH) currentSpeed = 0.60;
+  else if(digitalRead(switchPins[2]) == HIGH) currentSpeed = 0.40;
+  else if(digitalRead(switchPins[3]) == HIGH) currentSpeed = 0.25;
 
-  if(previousState != currentState) {
+  if(previousState != currentState || previousSpeed != currentSpeed) {
     if(DEBUG_MODE) Serial.print("Changing state! Previous state: ");
     if(DEBUG_MODE) Serial.print(previousState);
     if(DEBUG_MODE) Serial.print(", Current State: ");
@@ -240,4 +244,5 @@ void loop() {
   }
 
   previousState = currentState;
+  previousSpeed = currentSpeed;
 }
