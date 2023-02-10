@@ -183,6 +183,7 @@ double getDistance() {
 }
 
 void printDistance() {
+  Serial.print("Distance travelled (m): ")
   Serial.println(getDistance());
 }
 
@@ -218,8 +219,8 @@ void setup() {
   attachInterrupt(CHANNEL_B, readChannelB, CHANGE);
 
   forward();
-  // setTimeout(&coast, 2000);
-  if(DEBUG_MODE) setInterval(&printDistance, 2000);
+  setTimeout(&coast, 2000);
+  setInterval(&printDistance, 2000);
   if(DEBUG_MODE) setInterval(&printPins, 2000);
 }
 
