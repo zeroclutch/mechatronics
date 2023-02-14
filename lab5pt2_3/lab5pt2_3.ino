@@ -9,6 +9,8 @@ d. Black
 e. White
 And turns on the corresponding LED to indicate which. (No LED for black)
 **/
+#define CALIBRATION_MODE 1
+#define DEBUG 1
 
 #define RED 44
 #define BLUE 46
@@ -19,8 +21,8 @@ And turns on the corresponding LED to indicate which. (No LED for black)
 
 #define SAMPLE_COUNT 4
 
-#define DEBUG 1
-#define CIVIL_RIGHTS_ACT 0
+#define MIN(a,b) ((a)<(b)?(a):(b))
+#define MAX(a,b) ((a)>(b)?(a):(b))
 
 enum colorCodes {
   CODE_RED,
@@ -30,11 +32,47 @@ enum colorCodes {
   CODE_BLACK
 };
 
-// CHANGE THIS BASED ON READ VALUES
-const int maxR = 1024 * 4;
-const int maxG = 1024 * 4;
-const int maxB = 1024 * 4;
-const int maxW = 1024 * 4;
+typedef struct rgb {
+  float r, g, b;
+} RGB;
+
+typedef struct hsl {
+  float h, s, l;
+} HSL;
+
+/******* CHANGE EVERYTHING BELOW *******/
+
+// How to calibrate:
+// FOR RGB:
+//  1. Find the maximum R, G, B, W values for each color sheet.
+//  2. Put those values into maxR, maxG, maxB, maxW, respectively.
+// FOR HSL:
+//  1. Approximate the sRGB value and put it into the calibrationRGB struct
+//  2. Record the coefficients logged. Note those down.
+//  3. Do this for every possible color sheet
+//  4. Average the coefficients out and put them in rChange, gChange, bChange
+
+// This is the RGB value we are estimating for a given object
+RGB calibrationRGB = {
+  r: 255.0,
+  g: 100.0,
+  b: 0.0
+};
+
+// Coefficients (trueRgb/ourRgb)
+float rChange = 1.0;
+float gChange = 1.0;
+float bChange = 1.0;
+
+// srgb of object -> our rgb coordinates
+// our rgb coordinates -> srgb -> hsl -> classify
+
+const float maxR = 255;
+const float maxG = 255;
+const float maxB = 255;
+const float maxW = 255;
+
+/******* CHANGE EVERYTHING ABOVE *******/
 
 int i;
 
@@ -64,12 +102,12 @@ void sampleLED(int LED, int reading[]) {
   }
 }
 
-int getValues(int reading[]) {
+float getValues(int reading[]) {
   int sum = 0;
   for (i = 0; i < SAMPLE_COUNT; i++) {
     sum += reading[i];
   }
-  return sum;
+  return ((float) sum) / SAMPLE_COUNT / 1024 * 255.0;
 }
 
 void setup() {
@@ -111,9 +149,25 @@ void setup() {
   if(DEBUG) Serial.print("w: ");
   if(DEBUG) Serial.println(w);
 
-  int color = discriminateByColor(r, g, b, w);
+  if(CALIBRATION_MODE) {
+    rChange = calibrationRGB.r;
+    gChange = calibrationRGB.g;
+    bChange = calibrationRGB.b;
+    Serial.println("\n\nCalibration values:");
+    Serial.print("rChange = ");
+    Serial.print(rChange);
+    Serial.print(";\ngChange = ");
+    Serial.print(gChange);
+    Serial.print(";\nbChange = ");
+    Serial.print(bChange);
+    Serial.println(";\n\n");
+  }
 
-  switch(color) {
+  int color1 = discriminateByRGB(r, g, b, w);
+  int color2 = discriminateByHSL(r,g,b,w);
+
+  Serial.println("Using RGB formula!");
+  switch(color1) {
     case CODE_RED: 
       Serial.println("Red!");
       break;
@@ -129,18 +183,37 @@ void setup() {
     case CODE_BLACK: 
       Serial.println("Black!");
       break;
-    case -1:
-      Serial.println("no discriminating allowed");
+    default:
+      Serial.println("An unknown color was provided...");
+  }
+
+  Serial.println("Using HSL formula!");
+  switch(color2) {
+    case CODE_RED: 
+      Serial.println("Red!");
+      break;
+    case CODE_GREEN: 
+      Serial.println("Green!");
+      break;
+    case CODE_BLUE: 
+      Serial.println("Blue!");
+      break;
+    case CODE_WHITE: 
+      Serial.println("White!");
+      break;
+    case CODE_BLACK: 
+      Serial.println("Black!");
       break;
     default:
       Serial.println("An unknown color was provided...");
   }
 }
 
-int discriminateByColor(int r, int g, int b, int w) {
-  if(CIVIL_RIGHTS_ACT) { return -1; }
-
-  // Normalize color
+int discriminateByRGB(float r, float g, float b, float w) {
+  // Normalize color 
+  // Note, real normalization would also consider minR,
+  // we are assuming that to be zero, but that may not
+  // be the case.
   float percentR = ((float) r) / ((float) maxR);
   float percentG = ((float) g) / ((float) maxG);
   float percentB = ((float) b) / ((float) maxB);
@@ -183,6 +256,69 @@ int discriminateByColor(int r, int g, int b, int w) {
 // Checks to see if the first argument has the largest value
 bool firstIsBiggest(float a, float b, float c, float d, float e) {
   return a > b && a > c && a > d && a > e;
+}
+
+HSL rgb2hsl(float r, float g, float b) {
+  
+  HSL result;
+  
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  
+  float max = MAX(MAX(r,g),b);
+  float min = MIN(MIN(r,g),b);
+  
+  result.h = result.s = result.l = (max + min) / 2;
+
+  if (max == min) {
+    result.h = result.s = 0; // achromatic
+  }
+  else {
+    float d = max - min;
+    result.s = (result.l > 0.5) ? d / (2 - max - min) : d / (max + min);
+    
+    if (max == r) {
+      result.h = (g - b) / d + (g < b ? 6 : 0);
+    }
+    else if (max == g) {
+      result.h = (b - r) / d + 2;
+    }
+    else if (max == b) {
+      result.h = (r - g) / d + 4;
+    }
+    
+    result.h /= 6;
+  }
+
+  return result;
+  
+}
+
+int discriminateByHSL(float r, float g, float b, float w) {
+  // Multiply by coefficients
+  HSL hslValue = rgb2hsl(r * rChange, g * gChange, b * bChange);
+  
+  // Filter out grays and whites
+  if(w < 50) {
+    return CODE_BLACK;// TODO: change these as needed
+  }
+
+  if(w > 220) {
+    return CODE_WHITE; // TODO: change these as needed
+  }
+  
+  float h = hslValue.h;
+  // Get color
+  if(h <= 0.17) {
+    return CODE_RED;
+  } else if (h < 0.46) {
+    return CODE_GREEN;
+  } else if (h < 0.77) {
+    return CODE_BLUE;
+  } else {
+    return CODE_RED;
+  }
 }
 
 void loop() {}
