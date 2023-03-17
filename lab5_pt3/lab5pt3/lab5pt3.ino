@@ -16,8 +16,13 @@ And turns on the corresponding LED to indicate which. (No LED for black)
 #define BLUE 46
 #define GREEN 42
 #define WHITE 40
-#define TIMEINTERVAL 10
+#define TIMEINTERVAL 1000
 #define PHOTOIN A0
+
+#define RED_LED 8
+#define GREEN_LED 9
+#define BLUE_LED 10
+#define WHITE_LED 11
 
 #define SAMPLE_COUNT 20
 
@@ -78,10 +83,10 @@ float bChange = 1.16;
 // srgb of object -> our rgb coordinates
 // our rgb coordinates -> srgb -> hsl -> classify
 
-const float maxR = 66.3;
-const float maxG = 28.5;
-const float maxB = 40.8;
-const float maxW = 73.95;
+const float maxR = 140.0;
+const float maxG = 80.8;
+const float maxB = 105.0;
+const float maxW = 130;
 
 /******* CHANGE EVERYTHING ABOVE *******/
 
@@ -102,14 +107,14 @@ void sampleLED(int LED, int reading[]) {
   for (i = 0; i < SAMPLE_COUNT; i++) {
     // Enable the LED
     digitalWrite(LED, HIGH);
-    delayMicroseconds((unsigned long)(100 * TIMEINTERVAL));
+    delayMicroseconds((unsigned long)(TIMEINTERVAL));
 
     // Record the phototransistor reading
     reading[i] = analogRead(PHOTOIN);
     digitalWrite(LED, LOW);
 
     // Wait 100ms before taking another sample
-    delay(100);
+    delay(10);
   }
 }
 
@@ -121,19 +126,27 @@ float getValues(int reading[]) {
   return ((float) sum) / SAMPLE_COUNT / 1024 * 255.0;
 }
 
-void resolveColor(color) {
+float clamp(float x, float min, float max) {
+  return MAX(MIN(x, max), min);
+}
+
+void resolveColor(int color) {
   switch(color) {
     case CODE_RED: 
       Serial.println("Red!");
+      digitalWrite(RED_LED, HIGH);
       break;
     case CODE_GREEN: 
       Serial.println("Green!");
+      digitalWrite(GREEN_LED, HIGH);
       break;
     case CODE_BLUE: 
       Serial.println("Blue!");
+      digitalWrite(BLUE_LED, HIGH);
       break;
     case CODE_WHITE: 
       Serial.println("White!");
+      digitalWrite(WHITE_LED, HIGH);
       break;
     case CODE_BLACK: 
       Serial.println("Black!");
@@ -142,13 +155,13 @@ void resolveColor(color) {
       Serial.println("Orange!");
       break;
     case CODE_YELLOW: 
-      Serial.println("Black!");
+      Serial.println("Yellow!");
       break;
     case CODE_PURPLE: 
-      Serial.println("Black!");
+      Serial.println("Purple!");
       break;
     case CODE_PINK: 
-      Serial.println("Black!");
+      Serial.println("Pink!");
       break;
     default:
       Serial.println("An unknown color was provided...");
@@ -168,6 +181,16 @@ void setup() {
   pinMode(WHITE, OUTPUT);
   digitalWrite(WHITE, LOW);
 
+  pinMode(RED_LED, OUTPUT);
+  pinMode(BLUE_LED, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(WHITE_LED, OUTPUT);
+
+  digitalWrite(RED_LED, LOW);
+  digitalWrite(BLUE_LED, LOW);
+  digitalWrite(GREEN_LED, LOW);
+  digitalWrite(WHITE_LED, LOW);
+
   analogReference(DEFAULT);
 
   pinMode(PHOTOIN, INPUT);
@@ -181,7 +204,7 @@ void setup() {
   int r = getValues(redReading);
   int g = getValues(greenReading);
   int b = getValues(blueReading);
-  int w = getValues(blueReading);
+  int w = (r + g + b)/3;
 
   if(DEBUG) Serial.print("r: ");
   if(DEBUG) Serial.println(r);
@@ -191,6 +214,15 @@ void setup() {
   if(DEBUG) Serial.println(b);
   if(DEBUG) Serial.print("w: ");
   if(DEBUG) Serial.println(w);
+
+  if(DEBUG) Serial.print("analog r: ");
+  if(DEBUG) Serial.println((int) r * 1024.0 / 255.0 );
+  if(DEBUG) Serial.print("analog g: ");
+  if(DEBUG) Serial.println((int) g * 1024.0 / 255.0  );
+  if(DEBUG) Serial.print("analog b: ");
+  if(DEBUG) Serial.println((int) b * 1024.0 / 255.0 );
+  if(DEBUG) Serial.print("analog w: ");
+  if(DEBUG) Serial.println((int) w * 1024.0 / 255.0 );
 
   if(CALIBRATION_MODE) {
     rChange = calibrationRGB.r / r;
@@ -212,8 +244,8 @@ void setup() {
   Serial.println("Using RGB formula!");
   resolveColor(color1);
 
-  Serial.println("Using HSL formula!");
-  resolveColor(color2);
+  // Serial.println("Using HSL formula!");
+  // resolveColor(color2);
 }
 
 int discriminateByRGB(float r, float g, float b, float w) {
@@ -237,9 +269,13 @@ int discriminateByRGB(float r, float g, float b, float w) {
   if(DEBUG) Serial.println(percentW);
 
   // If no color reaches 25% of its maximum, say it's black
-  const float cutoffForBlack = 0.60;
+  const float cutoffForBlack = 0.75;
 
-  // Check black
+  // Check black/white
+  if(percentW > 1) {
+    return CODE_WHITE;
+  } 
+
   if(firstIsBiggest(cutoffForBlack, percentR, percentG, percentB, percentW)) {
     return CODE_BLACK;
   }
@@ -303,15 +339,19 @@ HSL rgb2hsl(float r, float g, float b) {
 }
 
 int discriminateByHSL(float r, float g, float b, float w) {
+  r = clamp(r * rChange, 0, 255);
+  g = clamp(g * gChange, 0, 255);
+  b = clamp(b * bChange, 0, 255);
+
   // Multiply by coefficients
-  HSL hslValue = rgb2hsl(r * rChange, g * gChange, b * bChange);
+  HSL hslValue = rgb2hsl(r, g, b);
   
   // Filter out grays and whites
-  if(w < 50) {
+  if(hslValue.s < 0.5 && hslValue.l < 0.2) {
     return CODE_BLACK;// TODO: change these as needed
   }
 
-  if(w > 220) {
+  if(hslValue.s < 0.5 && hslValue.l > 0.9) {
     return CODE_WHITE; // TODO: change these as needed
   }
   

@@ -1,8 +1,10 @@
+#define SWITCH_COUNT 4
+#define DEBUG 1
+
+
 #include <assert.h>
 #include <stdint.h>
 #include "timeouts.h"
-
-#define DEBUG_MODE 1
 
 // Motor definitions
 #define PIN_ENA 9
@@ -14,10 +16,8 @@
 #define PIN_COUNT 6
 
 // Distance definitions
-#define CHANNEL_A 3
-#define CHANNEL_B 4
-
-#define SWITCH_COUNT 4
+#define CHANNEL_A 2
+#define CHANNEL_B 3
 
 uint8_t switchPins[SWITCH_COUNT] = {24, 25, 26, 27};
 
@@ -63,6 +63,8 @@ volatile unsigned long lastChannelATime = 0;
 volatile unsigned long lastChannelBTime = 0;
 volatile unsigned long currChannelATime = 0;
 
+volatile bool started = false;
+
 /**
  * Sets the pins to the specified state
 */
@@ -72,15 +74,19 @@ void setPins(uint8_t enA, uint8_t in1, uint8_t in2, uint8_t enB, uint8_t in3, ui
     assert(in3 != in4);
   }
 
-  if(DEBUG_MODE) Serial.print("Setting pins. ");
-  if(DEBUG_MODE) Serial.print("State = ");
-  if(DEBUG_MODE) Serial.println(currentState);
+  if(DEBUG) {
+    Serial.print("Setting pins. ");
+    Serial.print("State = ");
+    Serial.println(currentState);
+  }
 
   /** LEFT WHEEL **/
 
   // Turn off enable momentarily so we don't accidentally brake during switching
-  if(DEBUG_MODE) Serial.print("enA value: ");
-  if(DEBUG_MODE) Serial.println(getPWMValue(enA));
+  if(DEBUG) {
+   Serial.print("enA value: ");
+   Serial.println(getPWMValue(enA));
+  }
 
   digitalWrite(PIN_IN1, in1);
   digitalWrite(PIN_IN2, in2);
@@ -91,9 +97,9 @@ void setPins(uint8_t enA, uint8_t in1, uint8_t in2, uint8_t enB, uint8_t in3, ui
   /** RIGHT WHEEL **/
 
   // Turn off enable momentarily so we don't accidentally brake during switching
-  if(DEBUG_MODE) Serial.print("enB value: ");
-  if(DEBUG_MODE) Serial.println(getPWMValue(enB));
-
+  if(DEBUG) {
+   Serial.print("enB value: ");
+   Serial.println(getPWMValue(enB)  
   digitalWrite(PIN_IN3, in3);
   digitalWrite(PIN_IN4, in4);
 
@@ -129,12 +135,14 @@ void awaitDistance(int cmDistance) {
   double metersDistance = ((double) cmDistance) / 100.0;
   
   while ((getDistance() - startingDistance) < metersDistance) {
-    if(DEBUG_MODE) Serial.print("Distance travelled: ");
-    if(DEBUG_MODE) Serial.print(getDistance() - startingDistance);
-    if(DEBUG_MODE) Serial.print(", Distance needed: ");
-    if(DEBUG_MODE) Serial.print(metersDistance);
-    if(DEBUG_MODE) Serial.print(", Counter: ");
-    if(DEBUG_MODE) Serial.println(counter);
+    if(DEBUG) {
+      Serial.print("Distance travelled: ");
+      Serial.print(getDistance() - startingDistance);
+      Serial.print(", Distance needed: ");
+      Serial.print(metersDistance);
+      Serial.print(", Counter: ");
+      Serial.println(counter);
+    }
   }
 
   currentState = BRAKE;
@@ -162,16 +170,19 @@ void readChannelA() {
  // If it is closer to the last pulse, we are millis() - lastChannelBTime moving from A to B
  long d2 = lastChannelBTime - lastChannelATime;
  long d1 = currChannelATime - lastChannelBTime;
- if(d1 > d2) {
-   counter++;
- } else {
-   counter--;
+ if(started) {
+  if(d1 > d2) {
+    counter--;
+  } else {
+    counter++;
+  }
  }
 
  lastChannelATime = currChannelATime;
 
  // Update stored distance value
  totalDistance = getDistance();
+
 }
 
 void readChannelB() {
@@ -183,8 +194,14 @@ double getDistance() {
 }
 
 void printDistance() {
-  Serial.print("Distance travelled (m): ")
-  Serial.println(getDistance());
+  Serial.print("Distance travelled (cm): ");
+  Serial.println(getDistance() * 100);
+
+  Serial.print("Speed (cm/s): ");
+  Serial.println(getDistance() * 100 / 2.0);
+
+  if(DEBUG) Serial.print("\nCounter: ");
+  if(DEBUG) Serial.println(counter);
 }
 
 void printPins() {
@@ -193,6 +210,10 @@ void printPins() {
     Serial.print(digitalRead(switchPins[i]));
     Serial.print(", ");
   }
+}
+
+void startCounting() {
+  started = true;
 }
 
 void setup() {
@@ -214,14 +235,15 @@ void setup() {
     pinMode(switchPins[i], INPUT);
   }
 
-  // Configure interrupt
-  attachInterrupt(CHANNEL_A, readChannelA, CHANGE);
-  attachInterrupt(CHANNEL_B, readChannelB, CHANGE);
+  // Configure interrupts
+  attachInterrupt(digitalPinToInterrupt(CHANNEL_A), readChannelA, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(CHANNEL_B), readChannelB, CHANGE);
 
   forward();
-  setTimeout(&coast, 2000);
-  setInterval(&printDistance, 2000);
-  if(DEBUG_MODE) setInterval(&printPins, 2000);
+  setTimeout(&startCounting, 1000);
+  setTimeout(&coast, 3000);
+  setTimeout(&printDistance, 3000);
+  if(DEBUG) setTimeout(&printPins, 2000);
 }
 
 void loop() {
@@ -235,10 +257,10 @@ void loop() {
   else if(digitalRead(switchPins[3]) == HIGH) currentSpeed = 0.25;
 
   if(previousState != currentState || previousSpeed != currentSpeed) {
-    if(DEBUG_MODE) Serial.print("Changing state! Previous state: ");
-    if(DEBUG_MODE) Serial.print(previousState);
-    if(DEBUG_MODE) Serial.print(", Current State: ");
-    if(DEBUG_MODE) Serial.println(currentState);
+    if(DEBUG) Serial.print("Changing state! Previous state: ");
+    if(DEBUG) Serial.print(previousState);
+    if(DEBUG) Serial.print(", Current State: ");
+    if(DEBUG) Serial.println(currentState);
 
     // Set pin values
     setAllPins();
